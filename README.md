@@ -87,12 +87,19 @@ Try it locally with the MCP Inspector: `npx @modelcontextprotocol/inspector`, tr
 
 ### Deploying (Railway)
 
-Deploy this repo as its own service from the Dockerfile, next to the ThreadOS backend:
+Deployed as the `mcp` service in the `thread-os` project, from `main`, in the backend's region:
+
+| Environment | Connector URL | ThreadOS backend | Store |
+| --- | --- | --- | --- |
+| production | `https://threados-mcp.up.railway.app/mcp` | backend-production-3174 | Railway Postgres |
+| development | `https://thrreados-mcp-dev.up.railway.app/mcp` | thread-os-dev-backend | Supabase dev DB, `threados_mcp` schema |
+
+Variables:
 
 - `PUBLIC_URL`: the service's public https URL (e.g. `https://mcp.thecarbonthread.com`)
 - `THREADOS_API_URL`: the backend's URL including `/api`
 - `THREADOS_APP_URL`: `https://app.thecarbonthread.com`
-- `DATABASE_URL`: the ThreadOS Postgres works (tables go in their own `threados_mcp` schema), or a separate one
+- `DATABASE_URL`: a Postgres of its own (production uses a Railway Postgres, `${{Postgres.DATABASE_URL}}`). Tables go in a `threados_mcp` schema, so sharing the ThreadOS database also works, but only if its user may create schemas (production's can't). Don't put them in `public`: the backend's Alembic autogenerate would propose dropping them.
 - `TOKEN_ENCRYPTION_KEY`: `openssl rand -hex 32`, kept secret. Changing it disconnects everyone.
 - `NODE_ENV=production` (refuses to start without `DATABASE_URL`)
 
