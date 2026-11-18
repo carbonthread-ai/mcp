@@ -91,15 +91,15 @@ Deployed as the `mcp` service in the `thread-os` project, from `main`, in the ba
 
 | Environment | Connector URL | ThreadOS backend | Store |
 | --- | --- | --- | --- |
-| production | `https://threados-mcp.up.railway.app/mcp` | backend-production-3174 | Railway Postgres |
-| development | `https://thrreados-mcp-dev.up.railway.app/mcp` | thread-os-dev-backend | Supabase dev DB, `threados_mcp` schema |
+| production | `https://threados-mcp.up.railway.app/mcp` | backend-production-3174 | the backend's Supabase database |
+| development | `https://thrreados-mcp-dev.up.railway.app/mcp` | thread-os-dev-backend | the backend's Supabase dev database |
 
 Variables:
 
 - `PUBLIC_URL`: the service's public https URL (e.g. `https://mcp.thecarbonthread.com`)
 - `THREADOS_API_URL`: the backend's URL including `/api`
 - `THREADOS_APP_URL`: `https://app.thecarbonthread.com`
-- `DATABASE_URL`: a Postgres of its own (production uses a Railway Postgres, `${{Postgres.DATABASE_URL}}`). Tables go in a `threados_mcp` schema, so sharing the ThreadOS database also works, but only if its user may create schemas (production's can't). Don't put them in `public`: the backend's Alembic autogenerate would propose dropping them.
+- `DATABASE_URL`: the ThreadOS database, `${{backend.DATABASE_URL}}`. The server creates five tables in `public`, all named `mcp_*` (ThreadOS's database role can't create schemas). They have row-level security on with no policies, like every ThreadOS table, so Supabase's `anon` and `authenticated` roles can't read them. The backend's Alembic env skips `mcp_*` tables, so autogenerate never proposes dropping them. Don't give a backend model an `mcp_` name.
 - `TOKEN_ENCRYPTION_KEY`: `openssl rand -hex 32`, kept secret. Changing it disconnects everyone.
 - `NODE_ENV=production` (refuses to start without `DATABASE_URL`)
 

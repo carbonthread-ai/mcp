@@ -29,8 +29,10 @@ const grant = (id: string): Grant => ({
 });
 
 describe("PostgresStore", () => {
-  it("creates its schema", async () => {
-    await (store as any).pool.query("SELECT 1 FROM threados_mcp.grants LIMIT 1");
+  it("creates its tables in public, mcp_* only, with row-level security on", async () => {
+    const { rows } = await (store as any).pool.query("SELECT tablename, rowsecurity FROM pg_tables WHERE schemaname = 'public' ORDER BY 1");
+    expect(rows.map((r: any) => r.tablename)).toEqual(["mcp_auth_codes", "mcp_grants", "mcp_oauth_clients", "mcp_pending_authorizations", "mcp_tokens"]);
+    expect(rows.every((r: any) => r.rowsecurity)).toBe(true);
   });
 
   it("stores clients, pending and grants", async () => {
