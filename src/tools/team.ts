@@ -1,15 +1,15 @@
 import { z } from "zod";
-import { ThreadOSError } from "../threados/api.js";
+import { FabricError } from "../fabric/api.js";
 import { pickEach } from "./format.js";
 import { defineTool, type ToolContext, type ToolDef } from "./registry.js";
 
 /**
- * Tools for the Carbon Thread team. Each needs the ThreadOS permission it names; ThreadOS checks the same permission
+ * Tools for the Carbon Thread team. Each needs the Fabric permission it names; Fabric checks the same permission
  * and the person's client assignments again on every call. Writes create notes, drafts and proposals; approving,
- * sending to the client and publishing stay in ThreadOS.
+ * sending to the client and publishing stay in Fabric.
  */
 
-const clientId = z.string().uuid().describe("The client's ThreadOS id (from list_clients)");
+const clientId = z.string().uuid().describe("The client's Fabric id (from list_clients)");
 const CHANNELS = ["youtube", "short", "reel", "tiktok", "linkedin", "instagram", "facebook", "x", "threads", "newsletter", "podcast", "carousel", "blog"] as const;
 const CATEGORIES = ["discovery", "onboarding", "strategy", "production", "meeting", "brand", "report", "contract", "other"] as const;
 const CALL_TYPES = ["discovery", "follow_up", "kickoff", "status", "other"] as const;
@@ -28,7 +28,7 @@ export const teamTools: ToolDef[] = [
   defineTool({
     name: "list_clients",
     title: "List clients",
-    description: "The clients you can see in ThreadOS (only your assigned clients if your role is limited to them), with status, tier and next step.",
+    description: "The clients you can see in Fabric (only your assigned clients if your role is limited to them), with status, tier and next step.",
     audience: "team", access: "read", permission: "client:view",
     input: {
       search: z.string().max(100).optional().describe("Part of a client's name"),
@@ -47,7 +47,7 @@ export const teamTools: ToolDef[] = [
     input: { client_id: clientId },
     async run(ctx, { client_id }) {
       ctx.assertClient(client_id);
-      return { ...(await ctx.api.get(`/clients/${client_id}`)), openInThreadOS: link(ctx, `/clients/${client_id}`) };
+      return { ...(await ctx.api.get(`/clients/${client_id}`)), openInFabric: link(ctx, `/clients/${client_id}`) };
     },
   }),
   defineTool({
@@ -71,13 +71,13 @@ export const teamTools: ToolDef[] = [
       ctx.assertClient(client_id);
       const brief = await ctx.api.get(`/clients/${client_id}/brief`);
       if (!brief) return "This client has no strategy brief yet.";
-      return { ...brief, openInThreadOS: link(ctx, `/clients/${client_id}/brief`) };
+      return { ...brief, openInFabric: link(ctx, `/clients/${client_id}/brief`) };
     },
   }),
   defineTool({
     name: "list_strategy_proposals",
     title: "List proposed strategy changes",
-    description: "Change sets proposed for the strategy brief (by ThreadOS, by the team or from this connection) and whether each is still open.",
+    description: "Change sets proposed for the strategy brief (by Fabric, by the team or from this connection) and whether each is still open.",
     audience: "team", access: "read", permission: "strategy:view",
     input: { client_id: clientId, open_only: z.boolean().default(true) },
     async run(ctx, { client_id, open_only }) {
@@ -104,7 +104,7 @@ export const teamTools: ToolDef[] = [
   defineTool({
     name: "get_document",
     title: "Read a library document",
-    description: "One document from a client's knowledge library, with its text and ThreadOS's digest of it.",
+    description: "One document from a client's knowledge library, with its text and Fabric's digest of it.",
     audience: "team", access: "read", permission: "knowledge:view",
     input: { document_id: z.string().uuid() },
     async run(ctx, { document_id }) {
@@ -136,7 +136,7 @@ export const teamTools: ToolDef[] = [
   defineTool({
     name: "ask_brain",
     title: "Ask the Brain",
-    description: "Ask ThreadOS's Brain a question about one client (strategy, calls, content, performance), across every client you can see, or about ThreadOS and the Method. It answers only from what you have access to.",
+    description: "Ask Fabric's Brain a question about one client (strategy, calls, content, performance), across every client you can see, or about Fabric and the Method. It answers only from what you have access to.",
     audience: "team", access: "read", permission: "knowledge:view",
     input: {
       question: z.string().min(1).max(2000),
@@ -178,7 +178,7 @@ export const teamTools: ToolDef[] = [
     input: { episode_id: z.string().uuid() },
     async run(ctx, { episode_id }) {
       const episode = await clientOf(ctx, `/episodes/${episode_id}`);
-      return { ...episode, openInThreadOS: link(ctx, `/clients/${episode.clientId}/episodes/${episode_id}`) };
+      return { ...episode, openInFabric: link(ctx, `/clients/${episode.clientId}/episodes/${episode_id}`) };
     },
   }),
   defineTool({
@@ -213,7 +213,7 @@ export const teamTools: ToolDef[] = [
   defineTool({
     name: "add_knowledge_note",
     title: "Add a note to the knowledge library",
-    description: "Save a note (or a link) to the client's knowledge library, e.g. thinking worked out in this chat. ThreadOS reads it into the client's context; with an approved brief, the changes it suggests come back as a proposal to review.",
+    description: "Save a note (or a link) to the client's knowledge library, e.g. thinking worked out in this chat. Fabric reads it into the client's context; with an approved brief, the changes it suggests come back as a proposal to review.",
     audience: "team", access: "write", permission: "knowledge:create",
     input: {
       client_id: clientId,
@@ -224,16 +224,16 @@ export const teamTools: ToolDef[] = [
     },
     async run(ctx, { client_id, title, text, url, category }) {
       ctx.assertClient(client_id);
-      if (!text && !url) throw new ThreadOSError(400, "Give the note some text or a link");
+      if (!text && !url) throw new FabricError(400, "Give the note some text or a link");
       const doc = await ctx.api.post(`/clients/${client_id}/library/notes`, { title, text, url, category });
       ctx.audit("knowledge.note_added", { clientId: client_id, documentId: doc?.id, title });
-      return { saved: doc, openInThreadOS: link(ctx, `/clients/${client_id}/library`) };
+      return { saved: doc, openInFabric: link(ctx, `/clients/${client_id}/library`) };
     },
   }),
   defineTool({
     name: "add_call_transcript",
     title: "Add a call transcript",
-    description: "Add a call that wasn't recorded in Fathom by pasting its transcript. ThreadOS summarises it and files it under the client.",
+    description: "Add a call that wasn't recorded in Fathom by pasting its transcript. Fabric summarises it and files it under the client.",
     audience: "team", access: "write", permission: "knowledge:create",
     input: {
       client_id: clientId,
@@ -252,7 +252,7 @@ export const teamTools: ToolDef[] = [
   defineTool({
     name: "propose_strategy_change",
     title: "Propose a strategy change",
-    description: "Describe a change to the client's strategy brief in plain words (e.g. 'Tighten the ICP to founders of 10-50 person firms'). ThreadOS drafts the edits as a proposal; nothing changes until someone who approves strategy accepts it in ThreadOS.",
+    description: "Describe a change to the client's strategy brief in plain words (e.g. 'Tighten the ICP to founders of 10-50 person firms'). Fabric drafts the edits as a proposal; nothing changes until someone who approves strategy accepts it in Fabric.",
     audience: "team", access: "write", permission: "strategy:edit",
     input: { client_id: clientId, instruction: z.string().min(5).max(8000) },
     async run(ctx, { client_id, instruction }) {
@@ -261,15 +261,15 @@ export const teamTools: ToolDef[] = [
       ctx.audit("strategy.change_proposed", { clientId: client_id, changeSetId: set?.id });
       return {
         proposal: set,
-        note: "Proposed for review. ThreadOS is drafting the edits; they appear on the brief's review panel, where someone who approves strategy accepts or rejects each one.",
-        openInThreadOS: link(ctx, `/clients/${client_id}/brief`),
+        note: "Proposed for review. Fabric is drafting the edits; they appear on the brief's review panel, where someone who approves strategy accepts or rejects each one.",
+        openInFabric: link(ctx, `/clients/${client_id}/brief`),
       };
     },
   }),
   defineTool({
     name: "propose_strategy_from_notes",
     title: "Propose strategy changes from notes",
-    description: "Hand ThreadOS a longer piece of material (a voice-note transcript, a working session from this chat, meeting notes). It's saved to the knowledge library, then ThreadOS reads it with the rest of the library and proposes brief edits for review.",
+    description: "Hand Fabric a longer piece of material (a voice-note transcript, a working session from this chat, meeting notes). It's saved to the knowledge library, then Fabric reads it with the rest of the library and proposes brief edits for review.",
     audience: "team", access: "write", permission: "strategy:edit",
     input: { client_id: clientId, text: z.string().min(20).max(200_000) },
     async run(ctx, { client_id, text }) {
@@ -278,8 +278,8 @@ export const teamTools: ToolDef[] = [
       ctx.audit("strategy.review_started", { clientId: client_id, changeSetId: set?.id });
       return {
         proposal: set,
-        note: "Saved to the library and sent for review. The proposed edits appear on the brief's review panel when ThreadOS finishes reading.",
-        openInThreadOS: link(ctx, `/clients/${client_id}/brief`),
+        note: "Saved to the library and sent for review. The proposed edits appear on the brief's review panel when Fabric finishes reading.",
+        openInFabric: link(ctx, `/clients/${client_id}/brief`),
       };
     },
   }),
@@ -304,13 +304,13 @@ export const teamTools: ToolDef[] = [
         title: a.title, showId: a.show_id, premise: a.premise, principle: a.principle, timely: a.timely, guest: a.guest, recordingDate: a.recording_date,
       });
       ctx.audit("content.episode_created", { clientId: a.client_id, episodeId: episode?.id, title: a.title });
-      return { episode, openInThreadOS: link(ctx, `/clients/${a.client_id}/episodes/${episode?.id}`) };
+      return { episode, openInFabric: link(ctx, `/clients/${a.client_id}/episodes/${episode?.id}`) };
     },
   }),
   defineTool({
     name: "update_episode",
     title: "Edit an episode",
-    description: "Change an episode's title, premise, principle, timely angle, guests or recording date. Its stage moves only in ThreadOS.",
+    description: "Change an episode's title, premise, principle, timely angle, guests or recording date. Its stage moves only in Fabric.",
     audience: "team", access: "write", permission: "content:edit",
     input: {
       episode_id: z.string().uuid(),
@@ -326,7 +326,7 @@ export const teamTools: ToolDef[] = [
       const body = Object.fromEntries(Object.entries({
         title: a.title, premise: a.premise, principle: a.principle, timely: a.timely, guest: a.guest, recordingDate: a.recording_date,
       }).filter(([, v]) => v !== undefined));
-      if (!Object.keys(body).length) throw new ThreadOSError(400, "Nothing to change");
+      if (!Object.keys(body).length) throw new FabricError(400, "Nothing to change");
       const episode = await ctx.api.patch(`/episodes/${a.episode_id}`, body);
       ctx.audit("content.episode_edited", { clientId: episode?.clientId, episodeId: a.episode_id, fields: Object.keys(body) });
       return episode;
@@ -335,7 +335,7 @@ export const teamTools: ToolDef[] = [
   defineTool({
     name: "draft_episode_brief",
     title: "Draft an episode brief",
-    description: "Start ThreadOS's research for an episode: it reads the strategy, calls and the links you give, and drafts the episode brief. The draft is approved and shared with the client in ThreadOS.",
+    description: "Start Fabric's research for an episode: it reads the strategy, calls and the links you give, and drafts the episode brief. The draft is approved and shared with the client in Fabric.",
     audience: "team", access: "write", permission: "content:create",
     input: {
       episode_id: z.string().uuid(),
@@ -346,13 +346,13 @@ export const teamTools: ToolDef[] = [
       const episode = await clientOf(ctx, `/episodes/${episode_id}`);
       const result = await ctx.api.post(`/episodes/${episode_id}/brief`, { instruction, links: links ?? [] });
       ctx.audit("content.episode_brief_started", { clientId: episode.clientId, episodeId: episode_id });
-      return { started: result, note: "Research started. The brief appears on the episode as a draft in a few minutes.", openInThreadOS: link(ctx, `/clients/${episode.clientId}/episodes/${episode_id}`) };
+      return { started: result, note: "Research started. The brief appears on the episode as a draft in a few minutes.", openInFabric: link(ctx, `/clients/${episode.clientId}/episodes/${episode_id}`) };
     },
   }),
   defineTool({
     name: "create_content_draft",
     title: "Create a content draft",
-    description: "Create a content piece as a draft (a LinkedIn post, a newsletter issue, a short's caption…), with copy written here. It goes through review in ThreadOS like any draft.",
+    description: "Create a content piece as a draft (a LinkedIn post, a newsletter issue, a short's caption…), with copy written here. It goes through review in Fabric like any draft.",
     audience: "team", access: "write", permission: "content:create",
     input: {
       client_id: clientId,
@@ -369,13 +369,13 @@ export const teamTools: ToolDef[] = [
         channel: a.channel, title: a.title, body: a.body, plannedFor: a.planned_for, episodeId: a.episode_id, principle: a.principle,
       });
       ctx.audit("content.draft_created", { clientId: a.client_id, pieceId: piece?.id, channel: a.channel });
-      return { draft: piece, openInThreadOS: link(ctx, `/clients/${a.client_id}/pieces`) };
+      return { draft: piece, openInFabric: link(ctx, `/clients/${a.client_id}/pieces`) };
     },
   }),
   defineTool({
     name: "update_content_draft",
     title: "Edit a content draft",
-    description: "Change the copy of a piece that is still a draft (title, body, hashtags, planned date). Pieces already in review, approved, scheduled or published are changed in ThreadOS.",
+    description: "Change the copy of a piece that is still a draft (title, body, hashtags, planned date). Pieces already in review, approved, scheduled or published are changed in Fabric.",
     audience: "team", access: "write", permission: "content:edit",
     input: {
       piece_id: z.string().uuid(),
@@ -388,12 +388,12 @@ export const teamTools: ToolDef[] = [
     async run(ctx, a) {
       const piece = await clientOf(ctx, `/pieces/${a.piece_id}`);
       if (!DRAFT_STATUSES.has(piece.status)) {
-        throw new ThreadOSError(409, `This piece is in ${piece.status}, not a draft. Change it in ThreadOS, where its review history is.`);
+        throw new FabricError(409, `This piece is in ${piece.status}, not a draft. Change it in Fabric, where its review history is.`);
       }
       const body = Object.fromEntries(Object.entries({
         title: a.title, body: a.body, hashtags: a.hashtags, plannedFor: a.planned_for, principle: a.principle,
       }).filter(([, v]) => v !== undefined));
-      if (!Object.keys(body).length) throw new ThreadOSError(400, "Nothing to change");
+      if (!Object.keys(body).length) throw new FabricError(400, "Nothing to change");
       const updated = await ctx.api.patch(`/pieces/${a.piece_id}`, body);
       ctx.audit("content.draft_edited", { clientId: piece.clientId, pieceId: a.piece_id, fields: Object.keys(body) });
       return updated;
@@ -402,20 +402,20 @@ export const teamTools: ToolDef[] = [
   defineTool({
     name: "submit_draft_for_review",
     title: "Send a draft to internal review",
-    description: "Hand a finished draft to the team's internal review. Passing review, sending it to the client and approving it happen in ThreadOS.",
+    description: "Hand a finished draft to the team's internal review. Passing review, sending it to the client and approving it happen in Fabric.",
     audience: "team", access: "write", permission: "content:edit",
     input: { piece_id: z.string().uuid(), comment: z.string().max(2000).optional() },
     async run(ctx, { piece_id, comment }) {
       const piece = await clientOf(ctx, `/pieces/${piece_id}`);
       const updated = await ctx.api.post(`/pieces/${piece_id}/review`, { action: "submit", comment });
       ctx.audit("content.draft_submitted", { clientId: piece.clientId, pieceId: piece_id });
-      return { piece: updated, openInThreadOS: link(ctx, `/clients/${piece.clientId}/pieces`) };
+      return { piece: updated, openInFabric: link(ctx, `/clients/${piece.clientId}/pieces`) };
     },
   }),
   defineTool({
     name: "create_quick_posts",
     title: "Quick posts from a note",
-    description: "Turn a note (an idea, a voice-memo transcript) and optional links into one draft per channel, written by ThreadOS with the client's skills and strategy. The drafts land in review.",
+    description: "Turn a note (an idea, a voice-memo transcript) and optional links into one draft per channel, written by Fabric with the client's skills and strategy. The drafts land in review.",
     audience: "team", access: "write", permission: "content:create",
     input: {
       client_id: clientId,
@@ -431,7 +431,7 @@ export const teamTools: ToolDef[] = [
         channels: JSON.stringify(a.channels), title: a.title, note: a.note, links: (a.links ?? []).join("\n"), plannedFrom: a.planned_from,
       });
       ctx.audit("content.quick_posts_started", { clientId: a.client_id, dropId: drop?.id, channels: a.channels.map((c: any) => c.channel) });
-      return { drop, note: "ThreadOS is writing the drafts; they appear under the client's content in review.", openInThreadOS: link(ctx, `/clients/${a.client_id}/content`) };
+      return { drop, note: "Fabric is writing the drafts; they appear under the client's content in review.", openInFabric: link(ctx, `/clients/${a.client_id}/content`) };
     },
   }),
 ];

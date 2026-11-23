@@ -2,9 +2,9 @@ import pg from "pg";
 import type { OAuthClientInformationFull } from "@modelcontextprotocol/sdk/shared/auth.js";
 import type { AuthCode, Grant, GrantLockOps, IssuedToken, PendingAuthorization, Store, UpstreamTokens } from "./types.js";
 
-// The tables sit in ThreadOS's own database, in public (ThreadOS's database role may not create schemas), all named
+// The tables sit in Fabric's own database, in public (Fabric's database role may not create schemas), all named
 // mcp_*: the backend's Alembic env skips mcp_* tables, so autogenerate never proposes dropping them. Row-level security
-// is on with no policies, as on every ThreadOS table, so Supabase's anon and authenticated roles can't read them.
+// is on with no policies, as on every Fabric table, so Supabase's anon and authenticated roles can't read them.
 const T = {
   clients: "mcp_oauth_clients",
   pending: "mcp_pending_authorizations",

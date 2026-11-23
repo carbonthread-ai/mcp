@@ -1,7 +1,7 @@
 {
-  "name": "@carbonthread/threados-mcp",
+  "name": "@carbonthread/fabric-mcp",
   "version": "0.1.0",
-  "description": "ThreadOS MCP server: use ThreadOS from Claude, ChatGPT or any MCP client, signed in as yourself, with ThreadOS roles and client access enforced",
+  "description": "Fabric MCP server: use Fabric from Claude, ChatGPT or any MCP client, signed in as yourself, with Fabric roles and client access enforced",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",

@@ -6,14 +6,14 @@ import { afterAll, expect, it } from "vitest";
 import { loadConfig } from "../src/config.js";
 import { createApp } from "../src/server.js";
 import { MemoryStore } from "../src/store/memory.js";
-import { CLIENT_A, startFakeThreadOS } from "./fake-threados.js";
+import { CLIENT_A, startFakeFabric } from "./fake-fabric.js";
 
 // The official MCP client, over real HTTP: initialize, list tools, call one
 const closers: (() => Promise<void>)[] = [];
 afterAll(async () => { for (const c of closers) await c(); });
 
 it("works with the MCP SDK client end to end", async () => {
-  const fake = await startFakeThreadOS();
+  const fake = await startFakeFabric();
   closers.push(fake.close);
   const port = 40000 + Math.floor(Math.random() * 10000);
   const base = `http://localhost:${port}`;

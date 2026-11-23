@@ -5,19 +5,19 @@ import { loadConfig } from "../src/config.js";
 import { createApp } from "../src/server.js";
 import { MemoryStore } from "../src/store/memory.js";
 import { assertCallAllowed, PolicyError, SCOPE_READ, SCOPE_WRITE } from "../src/policy.js";
-import { CLIENT_A, CLIENT_B, PIECE_APPROVED, PIECE_B, PIECE_DRAFT, startFakeThreadOS, type FakeThreadOS } from "./fake-threados.js";
+import { CLIENT_A, CLIENT_B, PIECE_APPROVED, PIECE_B, PIECE_DRAFT, startFakeFabric, type FakeFabric } from "./fake-fabric.js";
 
 const PUBLIC = "http://localhost:8787";
 const MCP = `${PUBLIC}/mcp`;
 const REDIRECT = "https://claude.ai/api/mcp/auth_callback";
 
-let fake: FakeThreadOS;
+let fake: FakeFabric;
 let app: ReturnType<typeof createApp>["app"];
 
 beforeAll(async () => {
-  fake = await startFakeThreadOS();
+  fake = await startFakeFabric();
   const config = loadConfig({
-    PUBLIC_URL: PUBLIC, THREADOS_API_URL: fake.url, THREADOS_APP_URL: "https://app.threados.test",
+    PUBLIC_URL: PUBLIC, FABRIC_API_URL: fake.url, FABRIC_APP_URL: "https://app.fabric.test",
     TOKEN_ENCRYPTION_KEY: randomBytes(32).toString("hex"), TRUST_PROXY: "false", RATE_LIMITS: "off",
   } as NodeJS.ProcessEnv);
   app = createApp(config, new MemoryStore()).app;
@@ -105,7 +105,7 @@ describe("OAuth", () => {
   it("shows the sign-in again on a wrong password, without issuing anything", async () => {
     const res = await connect("brian@thecarbonthread.com", "wrong");
     expect(res.status).toBe(401);
-    expect(res.text).toContain("don&#39;t match a ThreadOS account");
+    expect(res.text).toContain("don&#39;t match a Fabric account");
   });
 
   it("rejects a sign-in form without the browser's CSRF cookie", async () => {
@@ -139,7 +139,7 @@ describe("OAuth", () => {
     expect((await rpc(first.body.access_token, "tools/list")).status).toBe(401);
   });
 
-  it("disconnects on revoke and signs the ThreadOS session out", async () => {
+  it("disconnects on revoke and signs the Fabric session out", async () => {
     const conn = await connect("brian@thecarbonthread.com", "pw-admin");
     const res = await request(app).post("/revoke").type("form").send({ token: conn.access_token, client_id: conn.clientId });
     expect(res.status).toBe(200);
@@ -148,11 +148,12 @@ describe("OAuth", () => {
   });
 });
 
-describe("RBAC: tools follow the person's ThreadOS role", () => {
+describe("RBAC: tools follow the person's Fabric role", () => {
   it("administrator: every team tool, no portal tools", async () => {
     const { access_token } = await connect("brian@thecarbonthread.com", "pw-admin");
     const names = await tools(access_token);
     expect(names).toEqual(expect.arrayContaining(["list_clients", "get_strategy", "propose_strategy_change", "create_content_draft", "submit_draft_for_review"]));
+    expect(names).not.toContain("share_with_fabric");
     expect(names).not.toContain("share_with_threados");
   });
 
@@ -199,16 +200,19 @@ describe("RBAC: tools follow the person's ThreadOS role", () => {
   it("a client contact gets only their own portal, never team tools", async () => {
     const { access_token } = await connect("quincy@client.com", "pw-client");
     const names = await tools(access_token);
-    expect(names).toEqual(expect.arrayContaining(["get_my_workspace", "get_my_strategy", "share_with_threados", "get_waiting_on_me"]));
+    expect(names).toEqual(expect.arrayContaining(["get_my_workspace", "get_my_strategy", "share_with_fabric", "get_waiting_on_me"]));
     expect(names).not.toContain("list_clients");
     expect(names).not.toContain("get_strategy");
-    const shared = await call(access_token, "share_with_threados", { text: "We doubled retention by calling every churned user." });
+    const shared = await call(access_token, "share_with_fabric", { text: "We doubled retention by calling every churned user." });
     expect(shared.isError).toBe(false);
+    // The pre-rename name still works, so setups saved before ThreadOS became Fabric keep running
+    const old = await call(access_token, "share_with_threados", { text: "Another story." });
+    expect(old.isError).toBe(false);
     const other = await call(access_token, "get_my_workspace", { client_id: CLIENT_B });
     expect(other.isError).toBe(true);
   });
 
-  it("an account deactivated in ThreadOS loses the connection on its next call", async () => {
+  it("an account deactivated in Fabric loses the connection on its next call", async () => {
     const { access_token } = await connect("editor@thecarbonthread.com", "pw-editor");
     const editor = fake.users.find((u) => u.email === "editor@thecarbonthread.com")!;
     editor.active = false;
@@ -254,7 +258,32 @@ describe("Writes land as drafts and proposals", () => {
   });
 });
 
-describe("Policy: the fixed list of ThreadOS calls", () => {
+describe("Rename from ThreadOS: old names keep working", () => {
+  it("lists fabric_whoami, and keeps threados_whoami registered as a deprecated alias that still answers", async () => {
+    const { access_token } = await connect("brian@thecarbonthread.com", "pw-admin");
+    const res = await rpc(access_token, "tools/list");
+    const list = res.body.result.tools as any[];
+    expect(list.map((t) => t.name)).toEqual(expect.arrayContaining(["fabric_whoami", "threados_whoami"]));
+    const old = list.find((t) => t.name === "threados_whoami");
+    expect(old.description).toMatch(/^Deprecated: the old name of fabric_whoami/);
+    expect(old._meta).toEqual({ deprecated: true, replacedBy: "fabric_whoami" });
+    expect(list.find((t) => t.name === "fabric_whoami")._meta).toBeUndefined();
+    const [now, before] = [await call(access_token, "fabric_whoami"), await call(access_token, "threados_whoami")];
+    expect(now.isError).toBe(false);
+    expect(before.text).toBe(now.text);
+    expect(now.text).toContain("Fabric");
+  });
+
+  it("reads FABRIC_API_URL first and still accepts the old THREADOS_API_URL", () => {
+    const base = { PUBLIC_URL: PUBLIC, TOKEN_ENCRYPTION_KEY: randomBytes(32).toString("hex") };
+    expect(loadConfig({ ...base, THREADOS_API_URL: "http://old/api/" } as NodeJS.ProcessEnv).fabricApiUrl).toBe("http://old/api");
+    expect(loadConfig({ ...base, THREADOS_API_URL: "http://old/api", FABRIC_API_URL: "http://new/api" } as NodeJS.ProcessEnv).fabricApiUrl).toBe("http://new/api");
+    expect(loadConfig({ ...base, FABRIC_API_URL: "http://new/api", THREADOS_APP_URL: "https://old.app" } as NodeJS.ProcessEnv).fabricAppUrl).toBe("https://old.app");
+    expect(() => loadConfig(base as NodeJS.ProcessEnv)).toThrow("FABRIC_API_URL (or the old THREADOS_API_URL) is required");
+  });
+});
+
+describe("Policy: the fixed list of Fabric calls", () => {
   const all = [SCOPE_READ, SCOPE_WRITE];
   it.each([
     ["POST", `/clients/${CLIENT_A}/brief/approve`],
@@ -287,8 +316,8 @@ describe("Policy: the fixed list of ThreadOS calls", () => {
   });
 });
 
-describe("ThreadOS tokens", () => {
-  it("refreshes an expiring ThreadOS token once per connection, even under concurrent calls", async () => {
+describe("Fabric tokens", () => {
+  it("refreshes an expiring Fabric token once per connection, even under concurrent calls", async () => {
     fake.expireAccessTokens();
     const { access_token } = await connect("brian@thecarbonthread.com", "pw-admin");
     const results = await Promise.all(Array.from({ length: 6 }, () => call(access_token, "list_clients")));

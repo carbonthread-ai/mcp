@@ -1,23 +1,24 @@
 /**
- * What the ThreadOS MCP may do, independent of who signs in.
+ * What the Fabric MCP may do, independent of who signs in.
  *
  * Three layers decide every call, and all three must agree:
  *  1. The OAuth scopes the person granted to this connection (read, or read + write drafts).
- *  2. The person's ThreadOS role and client assignments. The MCP calls the ThreadOS API with that person's own
+ *  2. The person's Fabric role and client assignments. The MCP calls the Fabric API with that person's own
  *     token, so the backend's permission checks and client restrictions apply exactly as in the app. The MCP
  *     also hides tools the role can't use, so the AI isn't offered actions that would only fail.
  *  3. This file: the fixed list of API calls the MCP is ever allowed to make. Approving, sending to a client,
  *     scheduling, publishing, deleting, payments, and team, role and settings changes aren't on it, so no tool,
- *     bug or prompt can reach them. Those stay with people, in ThreadOS. (Brian's brief: "drafts come back into
- *     ThreadOS for review, and it can never approve or publish.")
+ *     bug or prompt can reach them. Those stay with people, in Fabric. (Brian's brief: "drafts come back into
+ *     Fabric for review, and it can never approve or publish.")
  */
 
+// The scope strings keep the pre-rename ThreadOS spelling: tokens already issued to connected apps carry them.
 export const SCOPE_READ = "threados:read";
 export const SCOPE_WRITE = "threados:write";
 export const SUPPORTED_SCOPES = [SCOPE_READ, SCOPE_WRITE];
 
 export const SCOPE_LABELS: Record<string, string> = {
-  [SCOPE_READ]: "Read the clients, strategy, knowledge and content you can already see in ThreadOS",
+  [SCOPE_READ]: "Read the clients, strategy, knowledge and content you can already see in Fabric",
   [SCOPE_WRITE]: "Add notes and transcripts, propose strategy changes, and create or edit drafts for review. Nothing is approved, sent or published",
 };
 
@@ -77,10 +78,10 @@ const ROUTES: Route[] = [
   r("GET", "/clients/{id}/pieces", false),
   r("GET", "/pieces/{id}", false),
 
-  // Team: writing. Each lands as a draft, a note or a proposal someone reviews in ThreadOS
+  // Team: writing. Each lands as a draft, a note or a proposal someone reviews in Fabric
   r("POST", "/clients/{id}/library/notes", true),
   r("POST", "/calls/paste", true),
-  // Strategy changes are proposals (a change set) that a strategist or account manager accepts in ThreadOS.
+  // Strategy changes are proposals (a change set) that a strategist or account manager accepts in Fabric.
   // Editing a section in place (PUT /brief/sections/…) isn't on this list.
   r("POST", "/clients/{id}/brief/instructions", true),
   r("POST", "/clients/{id}/brief/review", true),
@@ -101,7 +102,7 @@ const ROUTES: Route[] = [
   r("GET", "/portal/calendar", false),
   r("GET", "/portal/reviews", false),
   r("GET", "/portal/approvals", false),
-  // Client portal: writing. Ideas and stories to ThreadOS, comments on episode briefs. Approvals stay in the portal.
+  // Client portal: writing. Ideas and stories to Fabric, comments on episode briefs. Approvals stay in the portal.
   r("POST", "/portal/assistant", true),
   r("POST", "/portal/episodes/{id}/comments", true),
 ];
@@ -117,9 +118,9 @@ export class PolicyError extends Error {
 export function assertCallAllowed(method: string, path: string, body: unknown, scopes: string[]): void {
   const pathname = path.split("?")[0]!;
   const route = ROUTES.find((rt) => rt.method === method.toUpperCase() && rt.path.test(pathname));
-  if (!route) throw new PolicyError(`The ThreadOS MCP doesn't make this call (${method.toUpperCase()} ${pathname}). Do it in ThreadOS.`);
+  if (!route) throw new PolicyError(`The Fabric MCP doesn't make this call (${method.toUpperCase()} ${pathname}). Do it in Fabric.`);
   if (route.write && !scopes.includes(SCOPE_WRITE)) {
-    throw new PolicyError("This connection was granted read access only. Reconnect ThreadOS and allow drafts to make changes.");
+    throw new PolicyError("This connection was granted read access only. Reconnect Fabric and allow drafts to make changes.");
   }
   if (!route.write && !scopes.includes(SCOPE_READ)) throw new PolicyError("This connection has no read access.");
   const problem = route.check?.(body);

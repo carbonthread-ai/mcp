@@ -6,13 +6,13 @@ export interface Config {
   /** The MCP endpoint, publicUrl + /mcp. Tokens are issued for this resource only. */
   mcpUrl: URL;
   port: number;
-  /** ThreadOS backend base, including the API prefix, e.g. https://<backend>.up.railway.app/api */
-  threadosApiUrl: string;
-  /** The ThreadOS web app, linked from tool results so people finish reviews there. */
-  threadosAppUrl: string;
+  /** Fabric backend base, including the API prefix, e.g. https://<backend>.up.railway.app/api */
+  fabricApiUrl: string;
+  /** The Fabric web app, linked from tool results so people finish reviews there. */
+  fabricAppUrl: string;
   /** postgres://… for production; empty runs on the in-memory store (one process, lost on restart). */
   databaseUrl: string | null;
-  /** 32-byte key that encrypts the ThreadOS tokens held for each connection. */
+  /** 32-byte key that encrypts the Fabric tokens held for each connection. */
   encryptionKey: Buffer;
   accessTokenTtlSeconds: number;
   refreshTokenTtlSeconds: number;
@@ -24,10 +24,19 @@ export interface Config {
   rateLimits: boolean;
 }
 
-function required(env: NodeJS.ProcessEnv, name: string): string {
-  const value = env[name]?.trim();
-  if (!value) throw new Error(`${name} is required`);
+/** The first of these env vars that is set; the later names are old ones still accepted (THREADOS_* before the rename). */
+function required(env: NodeJS.ProcessEnv, name: string, ...oldNames: string[]): string {
+  const value = firstOf(env, name, ...oldNames);
+  if (!value) throw new Error(`${name}${oldNames.length ? ` (or the old ${oldNames.join(", ")})` : ""} is required`);
   return value;
+}
+
+function firstOf(env: NodeJS.ProcessEnv, ...names: string[]): string | undefined {
+  for (const name of names) {
+    const value = env[name]?.trim();
+    if (value) return value;
+  }
+  return undefined;
 }
 
 function list(value: string | undefined): string[] {
@@ -53,8 +62,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     publicUrl,
     mcpUrl: new URL("/mcp", publicUrl),
     port: Number(env.PORT ?? 8787),
-    threadosApiUrl: required(env, "THREADOS_API_URL").replace(/\/+$/, ""),
-    threadosAppUrl: (env.THREADOS_APP_URL ?? "https://app.thecarbonthread.com").replace(/\/+$/, ""),
+    fabricApiUrl: required(env, "FABRIC_API_URL", "THREADOS_API_URL").replace(/\/+$/, ""),
+    fabricAppUrl: (firstOf(env, "FABRIC_APP_URL", "THREADOS_APP_URL") ?? "https://app.thecarbonthread.com").replace(/\/+$/, ""),
     databaseUrl: env.DATABASE_URL?.trim() || null,
     encryptionKey: encryptionKeyFrom(required(env, "TOKEN_ENCRYPTION_KEY")),
     accessTokenTtlSeconds: Number(env.ACCESS_TOKEN_TTL_SECONDS ?? 3600),

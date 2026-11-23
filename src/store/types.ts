@@ -15,8 +15,8 @@ export interface PendingAuthorization {
 }
 
 /**
- * One person's connection from one MCP client (e.g. Brian's Claude). It holds that person's ThreadOS tokens,
- * sealed; every tool call runs on them, so ThreadOS's own roles and client access decide what the call can touch.
+ * One person's connection from one MCP client (e.g. Brian's Claude). It holds that person's Fabric tokens,
+ * sealed; every tool call runs on them, so Fabric's own roles and client access decide what the call can touch.
  */
 export interface Grant {
   id: string;
@@ -81,7 +81,7 @@ export interface Store {
   getGrant(id: string): Promise<Grant | undefined>;
   revokeGrant(id: string): Promise<void>;
   /**
-   * Runs `fn` while holding the grant's lock (across processes on Postgres). ThreadOS treats a reused refresh token
+   * Runs `fn` while holding the grant's lock (across processes on Postgres). Fabric treats a reused refresh token
    * as theft and signs the person out everywhere, so two refreshes of the same grant must never run at once.
    */
   withGrantLock<T>(id: string, fn: (grant: Grant | undefined, ops: GrantLockOps) => Promise<T>): Promise<T>;

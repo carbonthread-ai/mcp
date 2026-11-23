@@ -2,17 +2,17 @@ import type { Sealer } from "../crypto.js";
 import { assertCallAllowed } from "../policy.js";
 import type { Grant, Store } from "../store/types.js";
 
-/** An error the ThreadOS API returned (its status and message are passed to the AI as they are). */
-export class ThreadOSError extends Error {
+/** An error the Fabric API returned (its status and message are passed to the AI as they are). */
+export class FabricError extends Error {
   constructor(readonly status: number, message: string) {
     super(message);
-    this.name = "ThreadOSError";
+    this.name = "FabricError";
   }
 }
 
-/** The person's ThreadOS sign-in no longer works (signed out, password changed, deactivated): reconnect. */
+/** The person's Fabric sign-in no longer works (signed out, password changed, deactivated): reconnect. */
 export class ConnectionLostError extends Error {
-  constructor(message = "Your ThreadOS sign-in has ended. Reconnect ThreadOS in your AI app to continue.") {
+  constructor(message = "Your Fabric sign-in has ended. Reconnect Fabric in your AI app to continue.") {
     super(message);
     this.name = "ConnectionLostError";
   }
@@ -25,7 +25,7 @@ export interface UpstreamLogin {
   user: { id: string; email: string; fullName?: string; role?: { name: string; displayName?: string } };
 }
 
-const USER_AGENT = "ThreadOS-MCP/0.1";
+const USER_AGENT = "Fabric-MCP/0.1";
 
 function pick<T = unknown>(obj: any, camel: string, snake: string): T {
   return (obj?.[camel] ?? obj?.[snake]) as T;
@@ -53,8 +53,8 @@ function toLogin(data: any): UpstreamLogin {
   };
 }
 
-/** The unauthenticated part of the ThreadOS API: signing in, refreshing and signing out. */
-export class ThreadOSAuth {
+/** The unauthenticated part of the Fabric API: signing in, refreshing and signing out. */
+export class FabricAuth {
   constructor(private readonly baseUrl: string) {}
 
   async login(email: string, password: string): Promise<UpstreamLogin> {
@@ -63,7 +63,7 @@ export class ThreadOSAuth {
       headers: { "content-type": "application/json", "user-agent": USER_AGENT },
       body: JSON.stringify({ email, password }),
     });
-    if (!res.ok) throw new ThreadOSError(res.status, await readError(res));
+    if (!res.ok) throw new FabricError(res.status, await readError(res));
     return toLogin(await res.json());
   }
 
@@ -73,7 +73,7 @@ export class ThreadOSAuth {
       headers: { "content-type": "application/json", "user-agent": USER_AGENT },
       body: JSON.stringify({ refreshToken }),
     });
-    if (!res.ok) throw new ThreadOSError(res.status, await readError(res));
+    if (!res.ok) throw new FabricError(res.status, await readError(res));
     return toLogin(await res.json());
   }
 
@@ -89,20 +89,20 @@ export class ThreadOSAuth {
 export interface RequestOptions {
   query?: Record<string, string | number | boolean | string[] | undefined | null>;
   json?: unknown;
-  /** Sent as multipart/form-data (the ThreadOS endpoints that also take files). */
+  /** Sent as multipart/form-data (the Fabric endpoints that also take files). */
   form?: Record<string, string | undefined | null>;
 }
 
 const REFRESH_MARGIN_MS = 60_000;
 
 /**
- * Calls the ThreadOS API as the person behind one grant. Every call passes policy.assertCallAllowed first, then runs
- * on that person's own ThreadOS token, so the backend applies their role and client access as it would in the app.
+ * Calls the Fabric API as the person behind one grant. Every call passes policy.assertCallAllowed first, then runs
+ * on that person's own Fabric token, so the backend applies their role and client access as it would in the app.
  */
-export class ThreadOSClient {
+export class FabricClient {
   constructor(
     private readonly baseUrl: string,
-    private readonly auth: ThreadOSAuth,
+    private readonly auth: FabricAuth,
     private readonly store: Store,
     private readonly sealer: Sealer,
     private readonly grantId: string,
@@ -123,7 +123,7 @@ export class ThreadOSClient {
       res = await this.send(method, path, opts, token);
       if (res.status === 401) throw new ConnectionLostError();
     }
-    if (!res.ok) throw new ThreadOSError(res.status, await readError(res));
+    if (!res.ok) throw new FabricError(res.status, await readError(res));
     if (res.status === 204) return undefined as T;
     const text = await res.text();
     return (text ? JSON.parse(text) : undefined) as T;
@@ -136,6 +136,7 @@ export class ThreadOSClient {
       if (Array.isArray(v)) v.forEach((item) => url.searchParams.append(k, item));
       else url.searchParams.set(k, String(v));
     }
+    // x-threados-via keeps its pre-rename name: it is the header the backend knows
     const headers: Record<string, string> = { authorization: `Bearer ${token}`, "user-agent": USER_AGENT, "x-threados-via": "mcp" };
     let body: BodyInit | undefined;
     if (opts.form) {
@@ -164,10 +165,10 @@ export class ThreadOSClient {
 
   /**
    * Swaps the refresh token for a new pair under the grant's lock. If another request (or instance) already did,
-   * its new token is used instead: ThreadOS signs the person out everywhere when a refresh token is used twice.
+   * its new token is used instead: Fabric signs the person out everywhere when a refresh token is used twice.
    */
   private async refresh(staleAccess: string): Promise<string> {
-    // null = ThreadOS refused the refresh: the grant is revoked inside the lock, then the caller is told to reconnect
+    // null = Fabric refused the refresh: the grant is revoked inside the lock, then the caller is told to reconnect
     const token = await this.store.withGrantLock<string | null>(this.grantId, async (grant, { save, revoke }) => {
       if (!grant || grant.revokedAt) return null;
       const current = this.sealer.open(grant.upstreamAccessSealed);
@@ -176,7 +177,7 @@ export class ThreadOSClient {
       try {
         next = await this.auth.refresh(this.sealer.open(grant.upstreamRefreshSealed));
       } catch (error) {
-        if (error instanceof ThreadOSError && error.status < 500) {
+        if (error instanceof FabricError && error.status < 500) {
           await revoke();
           return null;
         }

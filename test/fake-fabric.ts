@@ -4,7 +4,7 @@ import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 
 /**
- * A small stand-in for the ThreadOS API with the same rules that matter here: per-role permission codes (copied
+ * A small stand-in for the Fabric API with the same rules that matter here: per-role permission codes (copied
  * from the backend's catalog), restriction to assigned clients, portal-only client logins, rotating refresh tokens
  * with reuse detection, and the approve/send endpoints, so tests can prove the MCP never reaches them.
  */
@@ -44,25 +44,25 @@ export const USERS: FakeUser[] = [
   { id: randomUUID(), email: "quincy@client.com", password: "pw-client", fullName: "Quincy Avery", role: "client", clients: [CLIENT_A], active: true },
 ];
 
-export interface FakeThreadOS {
+export interface FakeFabric {
   url: string;
   calls: { method: string; path: string; user?: string; body?: unknown }[];
   pieces: Map<string, any>;
   users: FakeUser[];
   /** Make the next access tokens expire immediately (to exercise refreshing). */
   expireAccessTokens(): void;
-  /** Tokens blacklisted because a refresh token was used twice (ThreadOS signs the user out everywhere). */
+  /** Tokens blacklisted because a refresh token was used twice (Fabric signs the user out everywhere). */
   reuseDetected: number;
   close(): Promise<void>;
 }
 
-export async function startFakeThreadOS(): Promise<FakeThreadOS> {
+export async function startFakeFabric(): Promise<FakeFabric> {
   const app = express();
   app.use(express.json());
   const access = new Map<string, string>(); // token → user id
   const refresh = new Map<string, { user: string; used: boolean }>();
   const state = {
-    calls: [] as FakeThreadOS["calls"],
+    calls: [] as FakeFabric["calls"],
     reuseDetected: 0,
     pieces: new Map<string, any>([
       [PIECE_DRAFT, { id: PIECE_DRAFT, clientId: CLIENT_A, channel: "linkedin", title: "Draft post", body: "v1", status: "draft" }],
