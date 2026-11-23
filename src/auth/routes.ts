@@ -3,10 +3,10 @@ import { rateLimit } from "express-rate-limit";
 import type { Sealer } from "../crypto.js";
 import { safeEqual } from "../crypto.js";
 import { SCOPE_READ, SCOPE_WRITE } from "../policy.js";
-import { ThreadOSError, type ThreadOSAuth } from "../threados/api.js";
+import { FabricError, type FabricAuth } from "../fabric/api.js";
 import type { Store } from "../store/types.js";
 import { renderMessage, renderSignIn, signInCsp } from "./pages.js";
-import { CSRF_COOKIE, type ThreadOSOAuthProvider } from "./provider.js";
+import { CSRF_COOKIE, type FabricOAuthProvider } from "./provider.js";
 
 function cookie(req: Request, name: string): string | undefined {
   for (const part of (req.headers.cookie ?? "").split(";")) {
@@ -17,19 +17,19 @@ function cookie(req: Request, name: string): string | undefined {
 }
 
 function signInMessage(error: unknown): string {
-  if (error instanceof ThreadOSError) {
-    if (error.status === 401 || error.status === 422) return "That email and password don't match a ThreadOS account.";
+  if (error instanceof FabricError) {
+    if (error.status === 401 || error.status === 422) return "That email and password don't match a Fabric account.";
     if (error.status === 429) return error.message;
-    if (error.status === 403) return error.message || "This ThreadOS account can't sign in.";
+    if (error.status === 403) return error.message || "This Fabric account can't sign in.";
   }
-  return "ThreadOS couldn't be reached. Try again in a moment.";
+  return "Fabric couldn't be reached. Try again in a moment.";
 }
 
-/** POST /oauth/sign-in: the form on the consent page. Signs in to ThreadOS as the person and finishes /authorize. */
-export function signInRouter(deps: { store: Store; sealer: Sealer; upstream: ThreadOSAuth; provider: ThreadOSOAuthProvider; rateLimits: boolean }) {
+/** POST /oauth/sign-in: the form on the consent page. Signs in to Fabric as the person and finishes /authorize. */
+export function signInRouter(deps: { store: Store; sealer: Sealer; upstream: FabricAuth; provider: FabricOAuthProvider; rateLimits: boolean }) {
   const router = express.Router();
   router.use(express.urlencoded({ extended: false, limit: "16kb" }));
-  // On top of ThreadOS's own lockout after repeated wrong passwords
+  // On top of Fabric's own lockout after repeated wrong passwords
   if (deps.rateLimits) router.use("/oauth/sign-in", rateLimit({ windowMs: 15 * 60_000, limit: 30, standardHeaders: true, legacyHeaders: false }));
 
   router.post("/oauth/sign-in", async (req: Request, res: Response) => {
@@ -39,13 +39,13 @@ export function signInRouter(deps: { store: Store; sealer: Sealer; upstream: Thr
     const fromCookie = cookie(req, CSRF_COOKIE);
     if (!pending || pending.expiresAt < Date.now() || typeof csrf !== "string" || !fromCookie
       || !safeEqual(csrf, pending.csrf) || !safeEqual(fromCookie, pending.csrf)) {
-      res.status(400).type("html").send(renderMessage("This sign-in expired", "Start connecting ThreadOS again from your AI app."));
+      res.status(400).type("html").send(renderMessage("This sign-in expired", "Start connecting Fabric again from your AI app."));
       return;
     }
     res.setHeader("Content-Security-Policy", signInCsp(pending.redirectUri));
     const client = await deps.store.getClient(pending.clientId);
     if (!client) {
-      res.status(400).type("html").send(renderMessage("Unknown app", "Start connecting ThreadOS again from your AI app."));
+      res.status(400).type("html").send(renderMessage("Unknown app", "Start connecting Fabric again from your AI app."));
       return;
     }
 
@@ -53,7 +53,7 @@ export function signInRouter(deps: { store: Store; sealer: Sealer; upstream: Thr
       await deps.store.takePending(pending.id);
       const url = new URL(pending.redirectUri);
       url.searchParams.set("error", "access_denied");
-      url.searchParams.set("error_description", "The person cancelled connecting ThreadOS");
+      url.searchParams.set("error_description", "The person cancelled connecting Fabric");
       if (pending.state) url.searchParams.set("state", pending.state);
       res.redirect(302, url.href);
       return;
@@ -74,7 +74,7 @@ export function signInRouter(deps: { store: Store; sealer: Sealer; upstream: Thr
     try {
       login = await deps.upstream.login(email.trim(), password);
     } catch (error) {
-      again(signInMessage(error), error instanceof ThreadOSError && error.status < 500 ? 401 : 502);
+      again(signInMessage(error), error instanceof FabricError && error.status < 500 ? 401 : 502);
       return;
     }
 
@@ -92,7 +92,7 @@ export function signInRouter(deps: { store: Store; sealer: Sealer; upstream: Thr
       res.redirect(302, redirect);
     } catch {
       await deps.upstream.logout(login.accessToken, login.refreshToken);
-      res.status(400).type("html").send(renderMessage("This sign-in expired", "Start connecting ThreadOS again from your AI app."));
+      res.status(400).type("html").send(renderMessage("This sign-in expired", "Start connecting Fabric again from your AI app."));
     }
   });
 

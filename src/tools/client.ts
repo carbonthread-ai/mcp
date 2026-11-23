@@ -2,15 +2,15 @@ import { z } from "zod";
 import { defineTool, type ToolDef } from "./registry.js";
 
 /**
- * Tools for a client contact who connects ThreadOS to their own Claude or ChatGPT (Skills & AI › "Use ThreadOS inside
+ * Tools for a client contact who connects Fabric to their own Claude or ChatGPT (Skills & AI › "Use Fabric inside
  * their AI"). They run on the portal API, so they see only their own workspace and only what the team has shared:
  * the approved strategy, episodes, the calendar and their review history. Carbon Thread's skill instructions,
- * internal notes and drafts in progress never reach them. They can send ideas, stories and comments into ThreadOS for
+ * internal notes and drafts in progress never reach them. They can send ideas, stories and comments into Fabric for
  * the team; approvals stay in the portal, where the person sees exactly what they're signing off.
  */
 
 const clientIdArg = {
-  client_id: z.string().uuid().optional().describe("Only if you're a contact on more than one ThreadOS workspace"),
+  client_id: z.string().uuid().optional().describe("Only if you're a contact on more than one Fabric workspace"),
 };
 
 const q = (a: { client_id?: string }) => ({ clientId: a.client_id });
@@ -18,7 +18,7 @@ const q = (a: { client_id?: string }) => ({ clientId: a.client_id });
 export const clientTools: ToolDef[] = [
   defineTool({
     name: "get_my_workspace",
-    title: "My ThreadOS workspace",
+    title: "My Fabric workspace",
     description: "Your workspace with Carbon Thread: where onboarding stands, your proposal and what's coming up.",
     audience: "client", access: "read", permission: "portal:view",
     input: clientIdArg,
@@ -59,7 +59,7 @@ export const clientTools: ToolDef[] = [
   defineTool({
     name: "get_waiting_on_me",
     title: "What's waiting on me",
-    description: "What Carbon Thread is waiting on you to review. Reviewing and approving happen in your ThreadOS portal; this lists them so you know what's there.",
+    description: "What Carbon Thread is waiting on you to review. Reviewing and approving happen in your Fabric portal; this lists them so you know what's there.",
     audience: "client", access: "read", permission: "portal:view",
     input: clientIdArg,
     async run(ctx, a) {
@@ -78,14 +78,15 @@ export const clientTools: ToolDef[] = [
     },
   }),
   defineTool({
-    name: "share_with_threados",
-    title: "Share an idea or story with ThreadOS",
-    description: "Send ThreadOS an idea, a story, a belief, a draft or an update (for example, something you worked out in this chat). ThreadOS saves what matters to your story bank and knowledge library and the Carbon Thread team reviews it before it shapes your content.",
+    name: "share_with_fabric",
+    aliases: ["share_with_threados"],
+    title: "Share an idea or story with Fabric",
+    description: "Send Fabric an idea, a story, a belief, a draft or an update (for example, something you worked out in this chat). Fabric saves what matters to your story bank and knowledge library and the Carbon Thread team reviews it before it shapes your content.",
     audience: "client", access: "write", permission: "portal:create",
     input: { ...clientIdArg, text: z.string().min(1).max(4000) },
     async run(ctx, a) {
       const reply = await ctx.api.request("POST", "/portal/assistant", { query: q(a), json: { text: a.text } });
-      ctx.audit("portal.shared_with_threados", { clientId: a.client_id ?? ctx.identity.clientIds?.[0], length: a.text.length });
+      ctx.audit("portal.shared_with_fabric", { clientId: a.client_id ?? ctx.identity.clientIds?.[0], length: a.text.length });
       return reply;
     },
   }),

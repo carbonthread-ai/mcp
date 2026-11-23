@@ -49,11 +49,11 @@ export function renderSignIn(v: SignInView): string {
   const wantsWrite = v.scopes.includes(SCOPE_WRITE);
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Connect ThreadOS</title><meta name="robots" content="noindex"><style>${STYLE}</style></head>
+<title>Connect Fabric</title><meta name="robots" content="noindex"><style>${STYLE}</style></head>
 <body><main>
-  <div class="brand">ThreadOS</div>
-  <h1>Connect ${esc(appName)} to ThreadOS</h1>
-  <p>Sign in with your ThreadOS account. ${esc(appName)} will act as you, with your role and only the clients you can already see.</p>
+  <div class="brand">Fabric</div>
+  <h1>Connect ${esc(appName)} to Fabric</h1>
+  <p>Sign in with your Fabric account. ${esc(appName)} will act as you, with your role and only the clients you can already see.</p>
   <div class="who">Sends you back to <b>${esc(host)}</b></div>
   ${v.error ? `<div class="error" role="alert">${esc(v.error)}</div>` : ""}
   <form method="post" action="/oauth/sign-in" autocomplete="on">
@@ -66,7 +66,7 @@ export function renderSignIn(v: SignInView): string {
     <fieldset><legend>${esc(appName)} may</legend>
       <label class="scope"><input type="checkbox" checked disabled> <span>${esc(SCOPE_LABELS[SCOPE_READ])}</span></label>
       ${wantsWrite ? `<label class="scope"><input type="checkbox" name="write" value="1" checked> <span>${esc(SCOPE_LABELS[SCOPE_WRITE])}</span></label>` : ""}
-      <p class="never">It can never approve, send to a client, schedule, publish or delete. Those stay in ThreadOS.</p>
+      <p class="never">It can never approve, send to a client, schedule, publish or delete. Those stay in Fabric.</p>
     </fieldset>
     <div class="row">
       <button class="secondary" type="submit" name="decision" value="deny" formnovalidate>Cancel</button>
@@ -78,7 +78,7 @@ export function renderSignIn(v: SignInView): string {
 
 export function renderMessage(title: string, message: string): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ThreadOS</title><style>${STYLE}</style></head><body><main><div class="brand">ThreadOS</div><h1>${esc(title)}</h1><p>${esc(message)}</p></main></body></html>`;
+<title>Fabric</title><style>${STYLE}</style></head><body><main><div class="brand">Fabric</div><h1>${esc(title)}</h1><p>${esc(message)}</p></main></body></html>`;
 }
 
 /** CSP for the sign-in page. form-action also governs the redirect after the form posts, so it allows the app's origin. */

@@ -16,7 +16,7 @@ if (config.databaseUrl) {
 
 const { app } = createApp(config, store);
 const server = app.listen(config.port, () => {
-  console.info(`ThreadOS MCP on :${config.port} · connector URL ${config.mcpUrl.href} · ThreadOS API ${config.threadosApiUrl}`);
+  console.info(`Fabric MCP on :${config.port} · connector URL ${config.mcpUrl.href} · Fabric API ${config.fabricApiUrl}`);
 });
 
 const sweep = setInterval(() => store.sweep(Date.now()).catch((e) => console.error("sweep failed", e)), 10 * 60_000);

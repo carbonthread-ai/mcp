@@ -6,10 +6,10 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import type { Config } from "./config.js";
 import { Sealer } from "./crypto.js";
 import { SUPPORTED_SCOPES } from "./policy.js";
-import { ThreadOSOAuthProvider } from "./auth/provider.js";
+import { FabricOAuthProvider } from "./auth/provider.js";
 import { signInRouter } from "./auth/routes.js";
-import { ConnectionLostError, ThreadOSAuth, ThreadOSClient, ThreadOSError } from "./threados/api.js";
-import { loadIdentity } from "./threados/identity.js";
+import { ConnectionLostError, FabricAuth, FabricClient, FabricError } from "./fabric/api.js";
+import { loadIdentity } from "./fabric/identity.js";
 import { buildMcpServer, describeError } from "./tools/index.js";
 import type { ToolContext } from "./tools/registry.js";
 import type { Store } from "./store/types.js";
@@ -20,8 +20,8 @@ function audit(event: string, fields: Record<string, unknown>) {
 
 export function createApp(config: Config, store: Store) {
   const sealer = new Sealer(config.encryptionKey);
-  const upstream = new ThreadOSAuth(config.threadosApiUrl);
-  const provider = new ThreadOSOAuthProvider(config, store, sealer, upstream);
+  const upstream = new FabricAuth(config.fabricApiUrl);
+  const provider = new FabricOAuthProvider(config, store, sealer, upstream);
 
   const app = express();
   app.disable("x-powered-by");
@@ -33,7 +33,7 @@ export function createApp(config: Config, store: Store) {
     issuerUrl: config.publicUrl,
     resourceServerUrl: config.mcpUrl,
     scopesSupported: SUPPORTED_SCOPES,
-    resourceName: "ThreadOS",
+    resourceName: "Fabric",
     ...(config.rateLimits ? {} : {
       authorizationOptions: { rateLimit: false }, clientRegistrationOptions: { rateLimit: false },
       tokenOptions: { rateLimit: false }, revocationOptions: { rateLimit: false },
@@ -43,7 +43,7 @@ export function createApp(config: Config, store: Store) {
 
   app.get("/health", (_req, res) => { res.json({ ok: true }); });
   app.get("/", (_req, res) => {
-    res.type("text").send(`ThreadOS MCP server.\n\nAdd it to Claude, ChatGPT or any MCP client as a custom connector:\n  ${config.mcpUrl.href}\n\nYou'll be asked to sign in with your ThreadOS account.\n`);
+    res.type("text").send(`Fabric MCP server.\n\nAdd it to Claude, ChatGPT or any MCP client as a custom connector:\n  ${config.mcpUrl.href}\n\nYou'll be asked to sign in with your Fabric account.\n`);
   });
 
   const bearer = requireBearerAuth({
@@ -71,17 +71,17 @@ export function createApp(config: Config, store: Store) {
     const auth = req.auth!;
     const grantId = String(auth.extra?.grantId);
     const userId = String(auth.extra?.userId);
-    const api = new ThreadOSClient(config.threadosApiUrl, upstream, store, sealer, grantId, auth.scopes);
+    const api = new FabricClient(config.fabricApiUrl, upstream, store, sealer, grantId, auth.scopes);
 
     let identity;
     try {
       identity = await loadIdentity(grantId, api);
     } catch (error) {
-      if (error instanceof ConnectionLostError || (error instanceof ThreadOSError && (error.status === 401 || error.status === 403))) {
-        // The ThreadOS sign-in ended or the account was deactivated: close the connection and make the app reconnect
+      if (error instanceof ConnectionLostError || (error instanceof FabricError && (error.status === 401 || error.status === 403))) {
+        // The Fabric sign-in ended or the account was deactivated: close the connection and make the app reconnect
         await provider.disconnect(grantId);
         res.status(401)
-          .set("WWW-Authenticate", `Bearer error="invalid_token", error_description="ThreadOS sign-in ended", resource_metadata="${getOAuthProtectedResourceMetadataUrl(config.mcpUrl)}"`)
+          .set("WWW-Authenticate", `Bearer error="invalid_token", error_description="Fabric sign-in ended", resource_metadata="${getOAuthProtectedResourceMetadataUrl(config.mcpUrl)}"`)
           .json({ error: "invalid_token", error_description: describeError(error) });
         return;
       }
@@ -90,10 +90,10 @@ export function createApp(config: Config, store: Store) {
     }
 
     const ctx: ToolContext = {
-      api, identity, scopes: auth.scopes, appUrl: config.threadosAppUrl,
+      api, identity, scopes: auth.scopes, appUrl: config.fabricAppUrl,
       assertClient(clientId: string) {
         if (identity.clientIds !== null && !identity.clientIds.includes(clientId)) {
-          throw new ThreadOSError(403, "You do not have access to this client");
+          throw new FabricError(403, "You do not have access to this client");
         }
       },
       audit(action, details) {

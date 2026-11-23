@@ -9,13 +9,14 @@ import type { OAuthClientInformationFull, OAuthTokenRevocationRequest, OAuthToke
 import type { Config } from "../config.js";
 import { randomToken, sha256, type Sealer } from "../crypto.js";
 import { normalizeScopes, redirectUriAllowed } from "../policy.js";
-import type { ThreadOSAuth } from "../threados/api.js";
-import { forgetIdentity } from "../threados/identity.js";
+import type { FabricAuth } from "../fabric/api.js";
+import { forgetIdentity } from "../fabric/identity.js";
 import type { Grant, Store } from "../store/types.js";
 import { renderSignIn, signInCsp } from "./pages.js";
 
 const PENDING_TTL_MS = 10 * 60_000;
 const CODE_TTL_MS = 60_000;
+// Keeps its pre-rename name so a sign-in page open during a deploy still matches its cookie
 export const CSRF_COOKIE = "threados_mcp_csrf";
 
 function sameResource(a: string | URL | undefined, b: URL): boolean {
@@ -24,12 +25,12 @@ function sameResource(a: string | URL | undefined, b: URL): boolean {
   return strip(String(a)) === strip(b.href);
 }
 
-export class ThreadOSOAuthProvider implements OAuthServerProvider {
+export class FabricOAuthProvider implements OAuthServerProvider {
   constructor(
     private readonly config: Config,
     private readonly store: Store,
     private readonly sealer: Sealer,
-    private readonly upstream: ThreadOSAuth,
+    private readonly upstream: FabricAuth,
   ) {}
 
   get clientsStore(): OAuthRegisteredClientsStore {
@@ -49,7 +50,7 @@ export class ThreadOSOAuthProvider implements OAuthServerProvider {
     };
   }
 
-  /** Shows the ThreadOS sign-in and consent page; POST /oauth/sign-in finishes it (auth/routes.ts). */
+  /** Shows the Fabric sign-in and consent page; POST /oauth/sign-in finishes it (auth/routes.ts). */
   async authorize(client: OAuthClientInformationFull, params: AuthorizationParams, res: Response): Promise<void> {
     if (!sameResource(params.resource, this.config.mcpUrl)) {
       throw new InvalidTargetError(`This server issues tokens for ${this.config.mcpUrl.href} only`);
@@ -69,7 +70,7 @@ export class ThreadOSOAuthProvider implements OAuthServerProvider {
     res.status(200).type("html").send(renderSignIn({ pendingId: id, csrf, client, redirectUri: params.redirectUri, scopes: normalizeScopes(params.scopes) }));
   }
 
-  /** Called by the sign-in route once ThreadOS accepted the person's email and password. */
+  /** Called by the sign-in route once Fabric accepted the person's email and password. */
   async completeAuthorization(
     pendingId: string,
     input: Pick<Grant, "userId" | "userEmail" | "scopes" | "upstreamAccessSealed" | "upstreamRefreshSealed" | "upstreamAccessExpiresAt">,
@@ -124,7 +125,7 @@ export class ThreadOSOAuthProvider implements OAuthServerProvider {
     if (token.usedAt) {
       // Refresh tokens rotate; a second use means it leaked, so the connection is closed
       await this.store.revokeGrant(token.grantId);
-      throw new InvalidGrantError("Refresh token already used. Reconnect ThreadOS.");
+      throw new InvalidGrantError("Refresh token already used. Reconnect Fabric.");
     }
     if (token.revokedAt || token.expiresAt < Date.now()) throw new InvalidGrantError("Refresh token expired or revoked");
     if (!sameResource(resource, this.config.mcpUrl)) throw new InvalidTargetError("Wrong resource");
@@ -147,7 +148,7 @@ export class ThreadOSOAuthProvider implements OAuthServerProvider {
     };
   }
 
-  /** Revoking either token disconnects the whole connection and signs its ThreadOS session out. */
+  /** Revoking either token disconnects the whole connection and signs its Fabric session out. */
   async revokeToken(client: OAuthClientInformationFull, request: OAuthTokenRevocationRequest): Promise<void> {
     const token = await this.store.getToken(sha256(request.token));
     if (!token || token.clientId !== client.client_id) return;
@@ -163,7 +164,7 @@ export class ThreadOSOAuthProvider implements OAuthServerProvider {
       try {
         await this.upstream.logout(this.sealer.open(grant.upstreamAccessSealed), this.sealer.open(grant.upstreamRefreshSealed));
       } catch {
-        // The ThreadOS session runs out on its own; the connection is already closed here
+        // The Fabric session runs out on its own; the connection is already closed here
       }
     }
   }

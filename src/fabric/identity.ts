@@ -1,4 +1,4 @@
-import type { ThreadOSClient } from "./api.js";
+import type { FabricClient } from "./api.js";
 
 export interface Identity {
   userId: string;
@@ -18,10 +18,10 @@ const TTL_MS = 60_000;
 const cache = new Map<string, { at: number; identity: Identity }>();
 
 /**
- * Who the grant belongs to, read from ThreadOS (not from the token), so a role change, a removed client assignment
+ * Who the grant belongs to, read from Fabric (not from the token), so a role change, a removed client assignment
  * or a deactivated account takes effect within a minute, the same as it does in the app.
  */
-export async function loadIdentity(grantId: string, api: ThreadOSClient, { fresh = false } = {}): Promise<Identity> {
+export async function loadIdentity(grantId: string, api: FabricClient, { fresh = false } = {}): Promise<Identity> {
   const hit = cache.get(grantId);
   if (!fresh && hit && Date.now() - hit.at < TTL_MS) return hit.identity;
   const me = await api.get("/users/me");

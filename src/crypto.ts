@@ -16,7 +16,7 @@ export function safeEqual(a: string, b: string): boolean {
   return x.length === y.length && timingSafeEqual(x, y);
 }
 
-/** AES-256-GCM. The ThreadOS tokens held for a connection are stored only in this form. */
+/** AES-256-GCM. The Fabric tokens held for a connection are stored only in this form. */
 export class Sealer {
   constructor(private readonly key: Buffer) {
     if (key.length !== 32) throw new Error("Encryption key must be 32 bytes");
