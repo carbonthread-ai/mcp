@@ -49,7 +49,8 @@ export function signInRouter(deps: { store: Store; sealer: Sealer; upstream: Fab
       return;
     }
 
-    if (decision !== "allow") {
+    // Only an explicit Cancel denies. A submit without the button's value (Enter in some browsers, password managers) is a sign-in attempt.
+    if (decision === "deny") {
       await deps.store.takePending(pending.id);
       const url = new URL(pending.redirectUri);
       url.searchParams.set("error", "access_denied");

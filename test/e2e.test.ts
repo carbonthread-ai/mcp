@@ -34,7 +34,7 @@ async function register() {
 }
 
 /** The whole OAuth flow a connector runs: register, /authorize, sign in on our page, exchange the code. */
-async function connect(email: string, password: string, opts: { write?: boolean; scope?: string } = {}) {
+async function connect(email: string, password: string, opts: { write?: boolean; scope?: string; decision?: string | null } = {}) {
   const clientId = await register();
   const verifier = b64url(randomBytes(32));
   const challenge = b64url(createHash("sha256").update(verifier).digest());
@@ -46,11 +46,13 @@ async function connect(email: string, password: string, opts: { write?: boolean;
   const pending = /name="pending" value="([^"]+)"/.exec(page.text)![1]!;
   const csrf = /name="csrf" value="([^"]+)"/.exec(page.text)![1]!;
   const cookie = page.headers["set-cookie"]![0]!.split(";")[0]!;
-  const form: Record<string, string> = { pending, csrf, email, password, decision: "allow" };
+  const form: Record<string, string> = { pending, csrf, email, password };
+  if (opts.decision !== null) form.decision = opts.decision ?? "allow";
   if (opts.write !== false) form.write = "1";
   const signIn = await request(app).post("/oauth/sign-in").set("Cookie", cookie).type("form").send(form);
   if (signIn.status !== 302) return { status: signIn.status, text: signIn.text };
   const location = new URL(signIn.headers.location!);
+  if (location.searchParams.has("error")) return { status: 302, error: location.searchParams.get("error"), state: location.searchParams.get("state") } as any;
   expect(location.origin + location.pathname).toBe(REDIRECT);
   expect(location.searchParams.get("state")).toBe("xyz");
   const token = await request(app).post("/token").type("form").send({
@@ -100,6 +102,29 @@ describe("OAuth", () => {
     expect(res.status).toBe(400);
     const ok = await request(app).post("/register").send({ client_name: "Cursor", redirect_uris: ["cursor://anysphere.cursor-retrieval/oauth/callback"], token_endpoint_auth_method: "none" });
     expect(ok.status).toBe(201);
+  });
+
+  it("makes Sign in and allow the form's first submit button, so pressing Enter signs in instead of cancelling", async () => {
+    const clientId = await register();
+    const page = await request(app).get("/authorize").query({
+      response_type: "code", client_id: clientId, redirect_uri: REDIRECT, code_challenge: "x".repeat(43), code_challenge_method: "S256",
+    });
+    const firstSubmit = /<button[^>]*type="submit"[^>]*>/.exec(page.text)![0];
+    expect(firstSubmit).toContain('value="allow"');
+  });
+
+  it("signs in when the form arrives without a decision (Enter key, password managers)", async () => {
+    const conn = await connect("brian@thecarbonthread.com", "pw-admin", { decision: null });
+    expect(conn.status).toBe(302);
+    expect(conn.error).toBeUndefined();
+    expect(conn.access_token).toBeTruthy();
+  });
+
+  it("sends access_denied back to the app only when the person presses Cancel", async () => {
+    const res = await connect("", "", { decision: "deny" });
+    expect(res.error).toBe("access_denied");
+    expect(res.state).toBe("xyz");
+    expect(fake.calls.some((c) => c.path === "/api/auth/login")).toBe(false);
   });
 
   it("shows the sign-in again on a wrong password, without issuing anything", async () => {
