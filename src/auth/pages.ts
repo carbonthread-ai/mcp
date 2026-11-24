@@ -25,7 +25,7 @@ legend { font-size:12px; color:var(--muted); padding:0 4px; }
 .scope input { margin-top:3px; }
 .never { font-size:12px; color:var(--muted); margin:8px 0 0; }
 .error { color:var(--danger); background:color-mix(in srgb, var(--danger) 10%, transparent); border-radius:9px; padding:9px 12px; font-size:13px; margin:0 0 14px; }
-.row { display:flex; gap:10px; }
+.row { display:flex; flex-direction:row-reverse; gap:10px; }
 button { flex:1; padding:12px; border-radius:9px; font:600 12px "DM Sans", "Helvetica Neue", sans-serif; letter-spacing:.08em; text-transform:uppercase; cursor:pointer; border:1px solid var(--accent); }
 button.primary { background:var(--accent); color:var(--card); }
 button.secondary { background:transparent; color:var(--ink); border-color:var(--line); }
@@ -69,8 +69,9 @@ export function renderSignIn(v: SignInView): string {
       <p class="never">It can never approve, send to a client, schedule, publish or delete. Those stay in Fabric.</p>
     </fieldset>
     <div class="row">
-      <button class="secondary" type="submit" name="decision" value="deny" formnovalidate>Cancel</button>
+      <!-- Allow comes first in the HTML: pressing Enter (or a password manager's auto-submit) uses the form's first submit button. Shown on the right by row-reverse. -->
       <button class="primary" type="submit" name="decision" value="allow">Sign in and allow</button>
+      <button class="secondary" type="submit" name="decision" value="deny" formnovalidate>Cancel</button>
     </div>
   </form>
 </main></body></html>`;
